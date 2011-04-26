@@ -8,8 +8,6 @@ import sys
 from twisted.words.protocols import irc
 from twisted.internet import protocol
 
-import markovgen
-
 class BanliBot(irc.IRCClient):
     def __init__(self):
         self.quiet = False
@@ -24,28 +22,19 @@ class BanliBot(irc.IRCClient):
             self.say(self.factory.channel,"OMG HAI {0}".format(user.upper()))
     def action(self,user,channel,msg):
         self.privmsg(user,channel,msg)
-    def set_quiet(self,value):
-        self.quiet = value
     def privmsg(self,user,channel,msg):
         print user,channel,msg
         clean = msg.strip("\n")
-        if clean == self.nickname + ": Quiet!":
-            self.set_quiet(True)
-            self.msg(self.factory.channel,"I'm shut up. For now.")
-
-            reactor.callLater(600, self.set_quiet, False)
-        elif clean.find(self.nickname) != -1 and self.quiet:
-            self.set_quiet(False)
-            self.say(self.factory.channel,"Someone say my name?")
-        elif clean == "Time for markov!":
-            self.msg(channel,self.factory.markov.generate())
-        if channel == self.factory.channel:
+        if clean == "!hush":
+            self.quiet = True
+            self.msg(user.split("!")[0],"I'm quiet now.")
+        elif clean == "!loud":
+            self.quiet = False
+            self.msg(user.split("!")[0],"I'm noisy now.")
+        if channel == self.factory.channel and not self.quiet:
             output = self.factory.check_map(clean)
-            if (output is not None) and (not self.quiet):
+            if output is not None:
                 self.say(self.factory.channel,str(output))
-            self.factory.markov.feed(clean)
-            self.factory.dump_markov()
-
         if channel == self.nickname:
             output = self.factory.add_to_map(msg)
             if output == "bad json":
@@ -63,15 +52,6 @@ class BanliFactory(protocol.ClientFactory):
         with open(sys.argv[2]) as f:
             self.map = pickle.load(f)
         print self.map
-
-        self.markov = markovgen.TwoWordMarkov()
-        with open('markov') as f:
-            self.markov = pickle.load(f)
-        print len(self.markov.words)
-
-    def dump_markov(self):
-        with open('markov','w') as f:
-            pickle.dump(self.markov,f)
 
     def check_map(self,item,expanded=False):
         # either return none, or an item
